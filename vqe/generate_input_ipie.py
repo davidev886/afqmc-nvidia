@@ -53,3 +53,6 @@ if __name__ == "__main__":
                           hamil_filename="hamiltonian.h5",
                           wfn_filename="wavefunction.h5",
                           nelec=mol.nelec)
+
+    # run ipie with
+    #       ipie ipie_input.json
