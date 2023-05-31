@@ -27,28 +27,29 @@ if __name__ == "__main__":
 
     molecule = MolecularData(geometry, basis, multiplicity, charge)
 
-    molecule = run_pyscf(molecule, run_scf=True, run_fci=False)
+    molecule = run_pyscf(molecule, run_scf=True, run_fci=True)
     mf = molecule._pyscf_data['scf']
     mol = molecule._pyscf_data['mol']
-    write_hamiltonian_ipie(mf, file_name="hamiltonian.h5")
     noccas, noccbs = mol.nelec
     # dump_scf(mol, "new.chk", mf.e_tot, mf.mo_energy, mf.mo_coeff, mf.mo_occ)
 
     print(f"SCF energy: {molecule.hf_energy}")
+    print(f"FCI energy: {molecule.fci_energy}")
 
     print("starting VQE")
     n_qubit = molecule.n_qubits
     n_electron = molecule.n_electrons
     fermionic_hamiltonian = get_fermion_operator(molecule.get_molecular_hamiltonian())
     jw_hamiltonian = jordan_wigner(fermionic_hamiltonian)
-    vqe = VqeHardwareEfficient(n_qubits=n_qubit, n_layers=1)
+    vqe = VqeHardwareEfficient(n_qubits=n_qubit, n_layers=1, n_electrons=mol.nelec)
     vqe.run(jw_hamiltonian,
             init_vals=np.random.rand(vqe.num_params),
-            options={'maxiter': 200, 'callback': True}
+            options={'maxiter': 100, 'callback': True}
             )
     print(f"VQE energy: {vqe.best_vqe_energy}")
-    write_trial_ipie(vqe.final_state_vector_best, mol.nelec, file_name="wavefunction.h5")
 
+    write_hamiltonian_ipie(mf, file_name="hamiltonian.h5")
+    write_trial_ipie(vqe.final_state_vector_best, mol.nelec, file_name="wavefunction.h5")
     write_json_input_file(input_filename="ipie_input.json",
                           hamil_filename="hamiltonian.h5",
                           wfn_filename="wavefunction.h5",

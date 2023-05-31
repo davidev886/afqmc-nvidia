@@ -7,7 +7,7 @@ from ipie.utils.io import write_hamiltonian, write_wavefunction
 from functools import reduce
 
 
-def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres=1e-6):
+def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres=1e-6, verbose=False):
     """
     :param mf: pyscf MF object
     :param file_name: name of the h5 file to create
@@ -16,7 +16,7 @@ def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres
     :returns: Nothing, but stores the hamiltonian as input for ipie
     """
     h1e, chol, enuc = generate_integrals(
-        mf.mol, mf.get_hcore(), mf.mo_coeff, chol_cut=thres, verbose=True
+        mf.mol, mf.get_hcore(), mf.mo_coeff, chol_cut=thres, verbose=verbose
     )
 
     write_hamiltonian(
@@ -57,6 +57,27 @@ def normal_ordering_swap(orbitals):
 
     return count_swaps
 
+def fix_nelec_in_state_vector(final_state_vector, nelec):
+    """
+    Projects the wave function final_state_vector in the subspace with the fix number of electrons given by nelec
+    :param final_state_vector Cirq object representing the state vector from a VQE simulation
+    :param nelec (tuple) with n_alpha, n_beta number of electrons
+    return: state vector (correctly normalized) with fixed number of electrons
+    """
+    n_alpha, n_beta = nelec
+    n_qubits = int(np.log2(len(final_state_vector)))
+    projected_vector = np.array(final_state_vector)
+    for decimal_ket, coeff in enumerate(final_state_vector):
+        string_ket = bin(decimal_ket)[2:].zfill(n_qubits)
+        string_alpha = string_ket[::2]  # alpha orbitals occupy the even positions
+        string_beta = string_ket[1::2]  # beta orbitals occupy the odd positions
+        alpha_occ = [pos for pos, char in enumerate(string_alpha) if char == '1']
+        beta_occ = [pos for pos, char in enumerate(string_beta) if char == '1']
+        if (len(alpha_occ) != n_alpha) or (len(beta_occ) != n_beta):
+            projected_vector[decimal_ket] = 0.0
+
+    normalization = np.sqrt(np.dot(projected_vector.conj(), projected_vector))
+    return projected_vector / normalization
 
 def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres=1e-6):
     """
@@ -78,9 +99,7 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
             beta_aux.append(i[2 * j + 1])
         alpha_occ = [i for i, x in enumerate(alpha_aux) if x == '1']
         beta_occ = [i for i, x in enumerate(beta_aux) if x == '1']
-        if ((np.abs(final_state_vector[k]) >= thres) and
-           (len(alpha_occ) == noccas) and
-           (len(beta_occ) == noccbs)):
+        if np.abs(final_state_vector[k]) >= thres:
             coeffs.append(final_state_vector[k])
             occas.append(alpha_occ)
             occbs.append(beta_occ)
@@ -95,14 +114,13 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
     occbs = [np.array(core + [o + ncore for o in ob]) for ob in occbs]
 
     coeffs = np.array(coeffs, dtype=complex)
-
+    normalization = np.dot(coeffs.conj(), coeffs)**0.5
     ixs = np.argsort(np.abs(coeffs))[::-1]
-    coeffs = coeffs[ixs]
+    coeffs = coeffs[ixs] / normalization.real
     occas = np.array(occas, dtype=int)[ixs]
     occbs = np.array(occbs, dtype=int)[ixs]
 
     return coeffs, occas, occbs
-
 
 def prep_input_ipie_old(final_state_vector, thres=1e-6):
     """
