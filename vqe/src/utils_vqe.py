@@ -7,7 +7,7 @@ from ipie.utils.io import write_hamiltonian, write_wavefunction
 from functools import reduce
 
 
-def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres=1e-6):
+def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres=1e-10):
     """
     :param mf: pyscf MF object
     :param file_name: name of the h5 file to create
@@ -19,6 +19,8 @@ def write_hamiltonian_ipie(mf, file_name="hamiltonian.h5", file_path="./", thres
         mf.mol, mf.get_hcore(), mf.mo_coeff, chol_cut=thres, verbose=True
     )
 
+    print(enuc)
+    print(chol.shape)
     write_hamiltonian(
         h1e, chol.copy(), e0=enuc,
         filename=os.path.join(file_path, file_name)
@@ -57,8 +59,29 @@ def normal_ordering_swap(orbitals):
 
     return count_swaps
 
+def fix_nelec_in_state_vector(final_state_vector, nelec):
+    """
+    Projects the wave function final_state_vector in the subspace with the fix number of electrons given by nelec
+    :param final_state_vector Cirq object representing the state vector from a VQE simulation
+    :param nelec (tuple) with n_alpha, n_beta number of electrons
+    return: state vector (correctly normalized) with fixed number of electrons
+    """
+    n_alpha, n_beta = nelec
+    n_qubits = int(np.log2(len(final_state_vector)))
+    projected_vector = np.array(final_state_vector)
+    for decimal_ket, coeff in enumerate(final_state_vector):
+        string_ket = bin(decimal_ket)[2:].zfill(n_qubits)
+        string_alpha = string_ket[::2]  # alpha orbitals occupy the even positions
+        string_beta = string_ket[1::2]  # beta orbitals occupy the odd positions
+        alpha_occ = [pos for pos, char in enumerate(string_alpha) if char == '1']
+        beta_occ = [pos for pos, char in enumerate(string_beta) if char == '1']
+        if (len(alpha_occ) != n_alpha) or (len(beta_occ) != n_beta):
+            projected_vector[decimal_ket] = 0.0
 
-def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres=1e-6):
+    normalization = np.sqrt(np.dot(projected_vector.conj(), projected_vector))
+    return projected_vector / normalization
+
+def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres=1e-10):
     """
     :param final_state_vector: Cirq object representing the state vector from a VQE simulation
     :param thres: Threshold for coefficients to keep from VQE wavefunction
@@ -69,7 +92,6 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
     coeffs = []
     occas = []
     occbs = []
-
     for k, i in enumerate(bin_ind):
         alpha_aux = []
         beta_aux = []
@@ -95,11 +117,12 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
     occbs = [np.array(core + [o + ncore for o in ob]) for ob in occbs]
 
     coeffs = np.array(coeffs, dtype=complex)
-
+    normalization = np.dot(coeffs.conj(), coeffs)**0.5
     ixs = np.argsort(np.abs(coeffs))[::-1]
-    coeffs = coeffs[ixs]
+    coeffs = coeffs[ixs] / normalization.real
     occas = np.array(occas, dtype=int)[ixs]
     occbs = np.array(occbs, dtype=int)[ixs]
+    normalization = 0.0
 
     return coeffs, occas, occbs
 
