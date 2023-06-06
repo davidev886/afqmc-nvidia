@@ -42,6 +42,7 @@ class VqeHardwareEfficient(object):
         return kernel, thetas
 
     def run_vqe_cudaq(self, hamiltonian, options={}):
+        cudaq.set_qpu('qpp')
         optimizer = cudaq.optimizers.COBYLA()
         kernel, thetas = self.layers()
         optimizer.max_iterations = options.get('maxiter', 10)
