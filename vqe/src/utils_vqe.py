@@ -57,6 +57,7 @@ def normal_ordering_swap(orbitals):
 
     return count_swaps
 
+
 def fix_nelec_in_state_vector(final_state_vector, nelec):
     """
     Projects the wave function final_state_vector in the subspace with the fix number of electrons given by nelec
@@ -78,6 +79,7 @@ def fix_nelec_in_state_vector(final_state_vector, nelec):
 
     normalization = np.sqrt(np.dot(projected_vector.conj(), projected_vector))
     return projected_vector / normalization
+
 
 def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres=1e-6):
     """
@@ -106,7 +108,7 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
     # We need it non_normal ordered
     for i in range(len(coeffs)):
         exponent = normal_ordering_swap([2 * j for j in occas[i]] + [2 * j + 1 for j in occbs[i]])
-        coeffs[i] = coeffs[i] * (-1)**exponent
+        coeffs[i] = coeffs[i] * (-1) ** exponent
 
     ncore = ncore_electrons // 2
     core = [i for i in range(ncore)]
@@ -114,13 +116,14 @@ def prep_input_ipie(final_state_vector, noccas, noccbs, ncore_electrons=0, thres
     occbs = [np.array(core + [o + ncore for o in ob]) for ob in occbs]
 
     coeffs = np.array(coeffs, dtype=complex)
-    normalization = np.dot(coeffs.conj(), coeffs)**0.5
+    normalization = np.dot(coeffs.conj(), coeffs) ** 0.5
     ixs = np.argsort(np.abs(coeffs))[::-1]
     coeffs = coeffs[ixs] / normalization.real
     occas = np.array(occas, dtype=int)[ixs]
     occbs = np.array(occbs, dtype=int)[ixs]
 
     return coeffs, occas, occbs
+
 
 def prep_input_ipie_old(final_state_vector, thres=1e-6):
     """
